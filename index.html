@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Study Planner</title>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#6ee7b7; --danger:#fb7185;
+      --glass: rgba(255,255,255,0.03);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#071021 0%, #071621 100%);color:#e6eef5}
+    .app{max-width:1100px;margin:28px auto;padding:22px}
+    header{display:flex;gap:16px;align-items:center;justify-content:space-between}
+    h1{margin:0;font-size:20px;letter-spacing:0.2px}
+    .sub{color:var(--muted);font-size:13px}
+
+    /* layout */
+    .grid{display:grid;grid-template-columns:380px 1fr;gap:18px;margin-top:18px}
+    .card{background:var(--card);border-radius:12px;padding:14px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+
+    /* form */
+    form .row{display:flex;gap:8px;margin-bottom:10px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input[type=text],input[type=datetime-local],textarea,select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
+    textarea{min-height:90px;resize:vertical}
+    .btn{padding:8px 12px;border-radius:10px;border:0;background:linear-gradient(90deg, #10B981,#34D399);color:#042018;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+
+    /* tasks list */
+    .controls{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+    .search{flex:1}
+    .task-list{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow:auto;padding-right:6px}
+    .task{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+    .task .left{width:6px;border-radius:6px}
+    .task .meta{flex:1}
+    .task h3{margin:0;font-size:15px}
+    .task p{margin:6px 0 0;font-size:13px;color:var(--muted)}
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:12px}
+    .pill{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);font-size:12px}
+
+    /* timeline */
+    .timeline{margin-top:12px;padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent)}
+    .timeline-row{display:flex;gap:10px;overflow:auto;padding-bottom:12px}
+    .t-card{min-width:220px;border-radius:10px;padding:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03)}
+
+    /* stats */
+    .stats{display:flex;gap:10px;margin-top:12px}
+    .stat{flex:1;padding:10px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);text-align:center}
+
+    /* responsive */
+    @media (max-width:900px){.grid{grid-template-columns:1fr;}.timeline-row{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Smart Study Planner</h1>
+        <div class="sub">Create study goals • reminders • visual timeline • local storage</div>
+      </div>
+      <div>
+        <button class="btn" id="exportBtn">Export JSON</button>
+        <button class="btn ghost" id="importBtn">Import</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2 style="margin:0 0 8px 0">Add / Edit Task</h2>
+        <form id="taskForm">
+          <input type="hidden" id="taskId">
+          <div class="row">
+            <div style="flex:1">
+              <label>Title</label>
+              <input id="title" type="text" placeholder="E.g., Revise calculus chapter 3" required>
+            </div>
+          </div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label>Description</label>
+              <textarea id="desc" placeholder="Notes, topics, resources..."></textarea>
+            </div>
+          </div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label>Due date & time</label>
+              <input id="due" type="datetime-local">
+            </div>
+            <div style="width:110px">
+              <label>Priority</label>
+              <select id="priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div style="flex:1">
+              <label>Estimate (mins)</label>
+              <input id="estimate" type="text" placeholder="e.g., 45">
+            </div>
+            <div style="width:120px">
+              <label>Reminder (mins before)</label>
+              <input id="reminderMins" type="text" placeholder="10">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn" type="submit">Save Task</button>
+            <button class="btn ghost" id="clearForm" type="button">Clear</button>
+            <button class="btn ghost" id="notifyPerm" type="button">Enable Notifications</button>
+          </div>
+        </form>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="small muted">Total</div>
+            <div id="statTotal">0</div>
+          </div>
+          <div class="stat">
+            <div class="small muted">Completed</div>
+            <div id="statDone">0</div>
+          </div>
+          <div class="stat">
+            <div class="small muted">Due Today</div>
+            <div id="statToday">0</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="card">
+          <div class="controls">
+            <input class="search" id="search" placeholder="Search tasks, topics, tags...">
+            <select id="filterPriority">
+              <option value="all">All priorities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            <select id="sortBy">
+              <option value="dueAsc">Due ↑</option>
+              <option value="dueDesc">Due ↓</option>
+              <option value="priority">Priority</option>
+            </select>
+          </div>
+
+          <div class="task-list card" id="taskList" style="margin:0;padding:12px;max-height:420px;overflow:auto"></div>
+
+          <div class="timeline card" id="timelineSection">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <strong>Timeline</strong>
+              <span class="muted small">Swipe horizontally to browse</span>
+            </div>
+            <div class="timeline-row" id="timelineRow"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <audio id="pingAudio" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" preload="auto"></audio>
+  </div>
+
+  <script>
+    // Smart Study Planner - single-file
+    (function(){
+      const LS_KEY = 'smartStudyTasks_v1';
+      let tasks = [];
+      let timers = {}; // store reminder timeouts
+
+      // elements
+      const form = document.getElementById('taskForm');
+      const titleIn = document.getElementById('title');
+      const descIn = document.getElementById('desc');
+      const dueIn = document.getElementById('due');
+      const priorityIn = document.getElementById('priority');
+      const estimateIn = document.getElementById('estimate');
+      const reminderMinsIn = document.getElementById('reminderMins');
+      const taskList = document.getElementById('taskList');
+      const timelineRow = document.getElementById('timelineRow');
+      const taskIdIn = document.getElementById('taskId');
+
+      // controls
+      const search = document.getElementById('search');
+      const filterPriority = document.getElementById('filterPriority');
+      const sortBy = document.getElementById('sortBy');
+      const exportBtn = document.getElementById('exportBtn');
+      const importBtn = document.getElementById('importBtn');
+      const notifyBtn = document.getElementById('notifyPerm');
+      const clearFormBtn = document.getElementById('clearForm');
+
+      const statTotal = document.getElementById('statTotal');
+      const statDone = document.getElementById('statDone');
+      const statToday = document.getElementById('statToday');
+
+      const pingAudio = document.getElementById('pingAudio');
+
+      // util
+      function uid(){return 't_'+Math.random().toString(36).slice(2,9)}
+      function save(){localStorage.setItem(LS_KEY,JSON.stringify(tasks));}
+      function load(){try{tasks = JSON.parse(localStorage.getItem(LS_KEY) || '[]')}catch(e){tasks=[]}}
+      function fmtDate(s){ if(!s) return 'No due'; const d=new Date(s); return d.toLocaleString(); }
+
+      // notifications
+      async function ensureNotif(){
+        if(!('Notification' in window)) return false;
+        if(Notification.permission === 'granted') return true;
+        if(Notification.permission !== 'denied'){
+          const p = await Notification.requestPermission();
+          return p === 'granted';
+        }
+        return false;
+      }
+      notifyBtn.addEventListener('click', async ()=>{
+        const ok = await ensureNotif();
+        notifyBtn.textContent = ok ? 'Notifications: ON' : 'Enable Notifications';
+      });
+
+      // scheduling reminders (only while page is open). We'll schedule any future reminders on load.
+      function scheduleReminder(task){
+        // clear existing
+        if(timers[task.id]){ clearTimeout(timers[task.id]); delete timers[task.id]; }
+        if(!task.due || task.completed) return;
+        if(!task.reminderMins) return;
+        const dueMs = new Date(task.due).getTime();
+        const remMs = dueMs - (Number(task.reminderMins)||0)*60000;
+        const now = Date.now();
+        const ms = remMs - now;
+        if(ms <= 0) return; // missed
+        timers[task.id] = setTimeout(()=>{
+          showReminder(task);
+          delete timers[task.id];
+        }, ms);
+      }
+
+      async function showReminder(task){
+        pingAudio.play().catch(()=>{});
+        const can = await ensureNotif();
+        const text = `${task.title} — due ${new Date(task.due).toLocaleString()}`;
+        if(can){
+          const n = new Notification('Study Reminder', {body:text, tag:task.id});
+          n.onclick = ()=>window.focus();
+        } else {
+          alert('Reminder: '+text);
+        }
+      }
+
+      // render
+      function render(){
+        // apply filters
+        const q = search.value.trim().toLowerCase();
+        const pr = filterPriority.value;
+        let list = tasks.slice();
+        if(pr !== 'all') list = list.filter(t=>t.priority===pr);
+        if(q) list = list.filter(t=> (t.title||'').toLowerCase().includes(q) || (t.desc||'').toLowerCase().includes(q) );
+
+        // sort
+        if(sortBy.value==='dueAsc') list.sort((a,b)=> (a.due||'')> (b.due||'')?1:-1);
+        if(sortBy.value==='dueDesc') list.sort((a,b)=> (a.due||'')< (b.due||'')?1:-1);
+        if(sortBy.value==='priority') list.sort((a,b)=> priorityRank(b.priority)-priorityRank(a.priority));
+
+        taskList.innerHTML = '';
+        list.forEach(t=>{
+          const el = document.createElement('div'); el.className='task';
+
+          const color = t.priority==='high'? 'linear-gradient(180deg,#fb7185,#f97316)' : t.priority==='medium' ? 'linear-gradient(180deg,#fbbf24,#60a5fa)' : 'linear-gradient(180deg,#34d399,#86efac)';
+          const left = document.createElement('div'); left.className='left'; left.style.background = color; el.appendChild(left);
+
+          const meta = document.createElement('div'); meta.className='meta';
+          const h = document.createElement('h3'); h.textContent = t.title || 'Untitled';
+          if(t.completed) { h.style.textDecoration='line-through'; h.style.opacity='0.7'; }
+          meta.appendChild(h);
+          const p = document.createElement('p'); p.className='muted'; p.textContent = (t.desc||''); meta.appendChild(p);
+
+          const info = document.createElement('div'); info.style.display='flex'; info.style.gap='8px'; info.style.marginTop='8px';
+          const due = document.createElement('div'); due.className='pill small'; due.textContent = fmtDate(t.due);
+          const est = document.createElement('div'); est.className='pill small'; est.textContent = (t.estimate? t.estimate+' mins':'')
+          info.appendChild(due); info.appendChild(est);
+          meta.appendChild(info);
+
+          el.appendChild(meta);
+
+          const ctrl = document.createElement('div'); ctrl.style.display='flex'; ctrl.style.flexDirection='column'; ctrl.style.gap='8px';
+          const doneBtn = document.createElement('button'); doneBtn.className='btn ghost small'; doneBtn.textContent = t.completed? 'Undo':'Done';
+          doneBtn.onclick = ()=>{ t.completed = !t.completed; save(); scheduleAll(); render(); };
+          const editBtn = document.createElement('button'); editBtn.className='btn ghost small'; editBtn.textContent='Edit';
+          editBtn.onclick = ()=>{ populateForm(t); window.scrollTo({top:0,behavior:'smooth'}); };
+          const delBtn = document.createElement('button'); delBtn.className='btn ghost small'; delBtn.textContent='Delete'; delBtn.onclick = ()=>{ if(confirm('Delete this task?')){ tasks = tasks.filter(x=>x.id!==t.id); save(); scheduleAll(); render(); }};
+          ctrl.appendChild(doneBtn); ctrl.appendChild(editBtn); ctrl.appendChild(delBtn);
+          el.appendChild(ctrl);
+
+          taskList.appendChild(el);
+        });
+
+        // timeline: group by day
+        renderTimeline(list);
+
+        // stats
+        statTotal.textContent = tasks.length;
+        statDone.textContent = tasks.filter(t=>t.completed).length;
+        const today = new Date(); today.setHours(0,0,0,0);
+        const tmr = new Date(today.getTime()+86400000);
+        statToday.textContent = tasks.filter(t=>{ if(!t.due) return false; const d=new Date(t.due); return d>=today && d<tmr }).length;
+      }
+
+      function renderTimeline(list){
+        // group by date string
+        const groups = {};
+        list.forEach(t=>{
+          const key = t.due ? new Date(t.due).toDateString() : 'No due';
+          if(!groups[key]) groups[key]=[]; groups[key].push(t);
+        });
+        timelineRow.innerHTML='';
+        Object.keys(groups).sort((a,b)=> new Date(a)-new Date(b)).forEach(k=>{
+          const box = document.createElement('div'); box.className='t-card';
+          const head = document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
+          const d = document.createElement('div'); d.textContent = k; d.style.fontWeight='600'; head.appendChild(d);
+          const count = document.createElement('div'); count.className='muted small'; count.textContent = groups[k].length+' tasks'; head.appendChild(count);
+          box.appendChild(head);
+          groups[k].forEach(t=>{
+            const item = document.createElement('div'); item.style.marginTop='8px';
+            const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between';
+            const tit = document.createElement('div'); tit.textContent = t.title; tit.className = t.completed ? 'muted' : '';
+            const pr = document.createElement('div'); pr.className='small'; pr.textContent = t.priority;
+            row.appendChild(tit); row.appendChild(pr);
+            item.appendChild(row);
+            box.appendChild(item);
+          });
+          timelineRow.appendChild(box);
+        });
+      }
+
+      function priorityRank(p){ return p==='high'?3: p==='medium'?2:1 }
+
+      // form
+      form.addEventListener('submit', (e)=>{
+        e.preventDefault();
+        const id = taskIdIn.value || uid();
+        const existing = tasks.find(t=>t.id===id);
+        const payload = {
+          id,
+          title: titleIn.value.trim(),
+          desc: descIn.value.trim(),
+          due: dueIn.value ? new Date(dueIn.value).toISOString() : null,
+          priority: priorityIn.value,
+          estimate: estimateIn.value? estimateIn.value.trim() : null,
+          reminderMins: reminderMinsIn.value? Number(reminderMinsIn.value): null,
+          completed: existing? existing.completed:false,
+          createdAt: existing? existing.createdAt : new Date().toISOString()
+        };
+        if(existing){ tasks = tasks.map(t=> t.id===id? payload : t); } else { tasks.push(payload); }
+        save(); scheduleAll(); resetForm(); render();
+      });
+
+      function populateForm(t){ taskIdIn.value = t.id; titleIn.value = t.title || ''; descIn.value = t.desc || ''; dueIn.value = t.due ? new Date(t.due).toISOString().slice(0,16) : ''; priorityIn.value = t.priority || 'medium'; estimateIn.value = t.estimate || ''; reminderMinsIn.value = t.reminderMins || '' }
+      function resetForm(){ taskIdIn.value=''; form.reset(); }
+      clearFormBtn.addEventListener('click', resetForm);
+
+      // schedule all reminders
+      function scheduleAll(){ // clear
+        Object.values(timers).forEach(tm=>clearTimeout(tm)); timers={};
+        tasks.forEach(scheduleReminder);
+      }
+
+      // import/export
+      exportBtn.addEventListener('click', ()=>{
+        const blob = new Blob([JSON.stringify(tasks, null, 2)], {type:'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'study-planner-tasks.json'; a.click(); URL.revokeObjectURL(url);
+      });
+      importBtn.addEventListener('click', ()=>{
+        const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json'; inp.onchange = ()=>{
+          const f = inp.files[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{
+            try{ const data = JSON.parse(r.result); if(Array.isArray(data)){ tasks = data; save(); scheduleAll(); render(); alert('Imported '+tasks.length+' tasks') } else alert('JSON must be an array of tasks'); }catch(e){ alert('Invalid JSON') }
+          }; r.readAsText(f);
+        }; inp.click();
+      });
+
+      // filters
+      [search,filterPriority,sortBy].forEach(el=> el.addEventListener('input', render));
+
+      // load
+      load(); scheduleAll(); render();
+
+      // when page is visible again, re-schedule (useful after sleep)
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) scheduleAll(); });
+
+      // quick demo data if empty (only first time)
+      if(tasks.length===0){ tasks.push({id:uid(), title:'Revise Algorithms - Greedy', desc:'Watch lecture + solve 2 problems', due: new Date(Date.now()+3600*1000*24).toISOString(), priority:'high', estimate:'90', reminderMins:60, completed:false, createdAt:new Date().toISOString()}); save(); render(); }
+
+      // keyboard shortcut: n = focus new task title
+      window.addEventListener('keydown', (e)=>{ if(e.key.toLowerCase()==='n' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName!=='TEXTAREA'){ titleIn.focus(); } });
+
+    })();
+  </script>
+</body>
+</html>
